@@ -1,0 +1,30 @@
+{
+  "name": "sitesense",
+  "version": "1.0.0",
+  "description": "A unified and actionable view of overall website health",
+  "main": "index.js",
+  "scripts": {
+    "bootstrap": "npm install",
+    "dev:web": "npm --workspace=apps/web run dev",
+    "dev:api": "npm --workspace=apps/api run dev",
+    "dev:cli": "npm --workspace=apps/cli run dev"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Adithya-1489181/SiteSense.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/Adithya-1489181/SiteSense/issues"
+  },
+  "homepage": "https://github.com/Adithya-1489181/SiteSense#readme",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "modules/*",
+    "db"
+  ]
+}
