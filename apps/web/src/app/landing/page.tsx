@@ -1,5 +1,3 @@
-import { div } from "framer-motion/client"
-import DashboardPage from "../dashboard/page"
 export default function LandingPage() {
   return (
   <div className = "flex-col justify-">
