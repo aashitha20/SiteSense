@@ -22,10 +22,8 @@ interface ScanResult {
 export default function ScanPage() {
     const router = useRouter();
     const [url, setUrl] = useState('');
-    const [scanType, setScanType] = useState('full');
     const [showRecentUrls, setShowRecentUrls] = useState(false);
     const [recentScans, setRecentScans] = useState<ScanResult[]>([]);
-    const [selectedScan, setSelectedScan] = useState<ScanResult | null>(null);
     const [isScanning, setIsScanning] = useState(false);
     const inputRef = useRef<HTMLInputElement>(null);
 
@@ -57,21 +55,16 @@ export default function ScanPage() {
         }
     };
 
-    const handleScanTypeChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-        setScanType(e.target.value);
-    };
-
     const handleStartScan = async () => {
         if (!url) return;
 
         setIsScanning(true);
-        setSelectedScan(null);
 
         // Create a new scan entry
         const newScan: ScanResult = {
             url,
             timestamp: new Date(),
-            scanType,
+            scanType: 'full',
             status: 'scanning'
         };
 
@@ -146,8 +139,6 @@ export default function ScanPage() {
                 )
             );
 
-            // Set as selected scan
-            setSelectedScan({ ...newScan, status: 'success', results: finalResults });
             setIsScanning(false);
         }, 3000);
     };
@@ -155,11 +146,6 @@ export default function ScanPage() {
     const selectRecentUrl = (recentUrl: string) => {
         setUrl(recentUrl);
         setShowRecentUrls(false);
-    };
-
-    const handleScanClick = (scan: ScanResult) => {
-        setSelectedScan(scan);
-        setUrl(scan.url);
     };
 
     const handleDeleteScan = (index: number, e: React.MouseEvent) => {
@@ -172,11 +158,6 @@ export default function ScanPage() {
             localStorage.setItem('recentScans', JSON.stringify(updatedScans));
         } else {
             localStorage.removeItem('recentScans');
-        }
-        
-        // Clear selected scan if it was deleted
-        if (selectedScan === recentScans[index]) {
-            setSelectedScan(null);
         }
     };
 
@@ -251,25 +232,6 @@ export default function ScanPage() {
                             </div>
                         </div>
 
-                        {/* Scan Type Selector */}
-                        <div>
-                            <label htmlFor="scanType" className="block text-sm font-medium text-primary mb-2">
-                                Scan Type
-                            </label>
-                            <select
-                                id="scanType"
-                                value={scanType}
-                                onChange={handleScanTypeChange}
-                                className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-transparent outline-none transition-colors text-primary"
-                            >
-                                <option value="full">Full Scan (All modules)</option>
-                                <option value="performance">Performance</option>
-                                <option value="seo">SEO</option>
-                                <option value="ux">UX & Accessibility</option>
-                                <option value="security">Security</option>
-                            </select>
-                        </div>
-
                         {/* Start Scan Button */}
                         <button
                             onClick={handleStartScan}
@@ -301,14 +263,11 @@ export default function ScanPage() {
                                     key={index}
                                     className={`bg-white rounded-2xl shadow-md border p-4 transition-all duration-200 ${
                                         scan.status !== 'scanning' 
-                                            ? 'cursor-pointer hover:shadow-xl hover:-translate-y-1' 
+                                            ? 'hover:shadow-xl hover:-translate-y-1' 
                                             : 'opacity-70'
-                                    } ${selectedScan === scan ? 'border-primary ring-2 ring-gray-200' : ''}`}
+                                    }`}
                                 >
-                                    <div 
-                                        className="flex items-start justify-between"
-                                        onClick={() => scan.status !== 'scanning' && handleScanClick(scan)}
-                                    >
+                                    <div className="flex items-start justify-between">
                                         <div className="flex-1 min-w-0">
                                             <div className="flex items-center gap-2 mb-1">
                                                 <h3 className="text-sm font-medium text-primary truncate">
@@ -381,179 +340,6 @@ export default function ScanPage() {
                         </div>
                     </div>
                 )}
-
-                {/* Scan Results Display */}
-                {selectedScan && selectedScan.status === 'success' && selectedScan.results && (
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-xl font-semibold text-primary">Scan Results</h2>
-                            <button
-                                onClick={() => setSelectedScan(null)}
-                                className="text-secondary hover:text-primary transition-colors"
-                            >
-                                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
-                                </svg>
-                            </button>
-                        </div>
-
-                        {/* Overall Score */}
-                        <Card>
-                            <CardHeader>
-                                <CardTitle>Overall Score</CardTitle>
-                                <CardDescription>{selectedScan.url}</CardDescription>
-                            </CardHeader>
-                            <CardContent>
-                                <div className="flex items-center gap-4">
-                                    <div className={`text-5xl font-bold ${
-                                        selectedScan.results.overall! > 70 ? 'text-green-600' :
-                                        selectedScan.results.overall! > 30 ? 'text-yellow-600' :
-                                        'text-red-600'
-                                    }`}>
-                                        {selectedScan.results.overall}
-                                    </div>
-                                    <div className="flex-1">
-                                        <div className="w-full bg-gray-200 rounded-full h-3">
-                                            <div 
-                                                className={`h-3 rounded-full transition-all ${
-                                                    selectedScan.results.overall! > 70 ? 'bg-green-600' :
-                                                    selectedScan.results.overall! > 30 ? 'bg-yellow-600' :
-                                                    'bg-red-600'
-                                                }`}
-                                                style={{ width: `${selectedScan.results.overall}%` }}
-                                            ></div>
-                                        </div>
-                                        <p className="text-sm text-gray-600 mt-2">
-                                            Scanned on {formatTimestamp(selectedScan.timestamp)}
-                                        </p>
-                                    </div>
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Performance Results */}
-                        {selectedScan.results.performance && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center justify-between">
-                                        <span>Performance</span>
-                                        <Badge className={`${
-                                            selectedScan.results.performance.score > 70 
-                                                ? 'bg-green-600 text-white hover:bg-green-700' 
-                                                : selectedScan.results.performance.score > 30 
-                                                ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
-                                                : 'bg-red-600 text-white hover:bg-red-700'
-                                        }`}>
-                                            {selectedScan.results.performance.score}/100
-                                        </Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <div className="space-y-2">
-                                        {Object.entries(selectedScan.results.performance.metrics).map(([key, value]) => (
-                                            <div key={key} className="flex justify-between text-sm">
-                                                <span className="text-gray-600 capitalize">
-                                                    {key.replace(/([A-Z])/g, ' $1').trim()}:
-                                                </span>
-                                                <span className="font-medium">{value as string}</span>
-                                            </div>
-                                        ))}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* SEO Results */}
-                        {selectedScan.results.seo && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center justify-between">
-                                        <span>SEO</span>
-                                        <Badge className={`${
-                                            selectedScan.results.seo.score > 70 
-                                                ? 'bg-green-600 text-white hover:bg-green-700' 
-                                                : selectedScan.results.seo.score > 30 
-                                                ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
-                                                : 'bg-red-600 text-white hover:bg-red-700'
-                                        }`}>
-                                            {selectedScan.results.seo.score}/100
-                                        </Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <ul className="space-y-2">
-                                        {selectedScan.results.seo.issues.map((issue, idx) => (
-                                            <li key={idx} className="flex items-start gap-2 text-sm">
-                                                <span className="text-yellow-500 mt-0.5">⚠️</span>
-                                                <span className="text-gray-700">{issue}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* UX Results */}
-                        {selectedScan.results.ux && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center justify-between">
-                                        <span>UX & Accessibility</span>
-                                        <Badge className={`${
-                                            selectedScan.results.ux.score > 70 
-                                                ? 'bg-green-600 text-white hover:bg-green-700' 
-                                                : selectedScan.results.ux.score > 30 
-                                                ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
-                                                : 'bg-red-600 text-white hover:bg-red-700'
-                                        }`}>
-                                            {selectedScan.results.ux.score}/100
-                                        </Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <ul className="space-y-2">
-                                        {selectedScan.results.ux.recommendations.map((rec, idx) => (
-                                            <li key={idx} className="flex items-start gap-2 text-sm">
-                                                <span className="text-blue-500 mt-0.5">💡</span>
-                                                <span className="text-gray-700">{rec}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {/* Security Results */}
-                        {selectedScan.results.security && (
-                            <Card>
-                                <CardHeader>
-                                    <CardTitle className="flex items-center justify-between">
-                                        <span>Security</span>
-                                        <Badge className={`${
-                                            selectedScan.results.security.score > 70 
-                                                ? 'bg-green-600 text-white hover:bg-green-700' 
-                                                : selectedScan.results.security.score > 30 
-                                                ? 'bg-yellow-500 text-white hover:bg-yellow-600' 
-                                                : 'bg-red-600 text-white hover:bg-red-700'
-                                        }`}>
-                                            {selectedScan.results.security.score}/100
-                                        </Badge>
-                                    </CardTitle>
-                                </CardHeader>
-                                <CardContent>
-                                    <ul className="space-y-2">
-                                        {selectedScan.results.security.vulnerabilities.map((vuln, idx) => (
-                                            <li key={idx} className="flex items-start gap-2 text-sm">
-                                                <span className="text-green-500 mt-0.5">✅</span>
-                                                <span className="text-gray-700">{vuln}</span>
-                                            </li>
-                                        ))}
-                                    </ul>
-                                </CardContent>
-                            </Card>
-                        )}
-                    </div>
-                )}
             </div>
             <Footer />
         </div>
@@ -571,6 +357,6 @@ function formatTimestamp(date: Date): string {
     if (minutes < 60) return `${minutes} minute${minutes > 1 ? 's' : ''} ago`;
     if (hours < 24) return `${hours} hour${hours > 1 ? 's' : ''} ago`;
     if (days < 7) return `${days} day${days > 1 ? 's' : ''} ago`;
-    
+
     return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
 }
