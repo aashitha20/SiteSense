@@ -1,14 +1,20 @@
 {
   "name": "@sitesense/security",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "description": "Handles Website security Scans and OWASP ZAP Integration.",
+  "main": "src/index.ts",
+  "type": "module",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"No tests yet\"",
+    "lint": "eslint . --ext .ts"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "type": "commonjs",
-  "private": true
+  "dependencies": {
+    "axios": "^1.6.0",
+    "dotenv": "^17.2.3",
+    "sitesense": "file:../.."
+  },
+  "devDependencies": {
+    "@types/node": "^24.7.2",
+    "typescript": "^5.0.0"
+  }
 }
