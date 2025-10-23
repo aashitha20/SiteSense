@@ -2,15 +2,27 @@
   "name": "@sitesense/performance",
   "version": "1.0.0",
   "main": "index.js",
-  "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "type": "module",
   "private": true,
-  "description": "",
+  "description": "Multi-endpoint performance and SEO auditor using Google Lighthouse",
+  "scripts": {
+    "audit": "node cli.js",
+    "example": "node example.js",
+    "compare": "node compare.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "lighthouse",
+    "performance",
+    "seo",
+    "audit",
+    "web-vitals"
+  ],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "chrome-launcher": "^1.1.2"
+  },
   "devDependencies": {
     "@axe-core/puppeteer": "^4.10.2",
     "@types/node": "^24.6.2",

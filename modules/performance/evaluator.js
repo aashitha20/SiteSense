@@ -1,69 +1,236 @@
-import lighthouse from 'lighthouse';
-import chromeLauncher from 'chrome-launcher';
+﻿import lighthouse from 'lighthouse';
+import * as chromeLauncher from 'chrome-launcher';
 
 /**
- * Evaluate all absolute URLs of a single website using Lighthouse.
- * Extracts Performance and SEO scores for each page.
- * Callable directly from a crawler or orchestrator module.
- *
- * @param {Object} siteData - JSON object containing "urls" array of absolute URLs.
- * Example:
- * {
- *   "urls": [
- *     "https://example.com",
- *     "https://example.com/about",
- *     "https://example.com/contact"
- *   ]
- * }
- *
- * @returns {Promise<Object>} - JSON object containing each URL’s Lighthouse scores.
+ * Calculate impact factor based on audit score and weight
  */
-export async function evaluateWebsitePages(siteData) {
-  if (!siteData || !Array.isArray(siteData.urls)) {
-    throw new Error('Invalid input: expected a JSON object with a "urls" array.');
-  }
+function calculateImpact(score, weight) {
+  if (score >= 0.9) return 'Low';
+  if (score >= 0.5 && weight >= 5) return 'High';
+  if (score >= 0.5 || weight >= 3) return 'Medium';
+  return 'High';
+}
 
-  const results = {};
-  const urls = siteData.urls;
+/**
+ * Calculate effort factor for fixing the issue
+ */
+function calculateEffort(audit) {
+  const highEffortAudits = [
+    'unused-javascript', 'legacy-javascript', 'total-byte-weight', 
+    'modern-image-formats', 'uses-responsive-images', 'offscreen-images', 
+    'unminified-javascript', 'unminified-css', 'efficient-animated-content',
+    'server-response-time', 'redirects', 'uses-rel-preconnect'
+  ];
+  const lowEffortAudits = [
+    'meta-description', 'document-title', 'image-alt', 'link-text', 
+    'crawlable-anchors', 'canonical', 'robots-txt', 'hreflang',
+    'viewport', 'http-status-code'
+  ];
+  if (highEffortAudits.includes(audit.id)) return 'High';
+  if (lowEffortAudits.includes(audit.id)) return 'Low';
+  return 'Medium';
+}
 
-  console.log(`🔍 Starting Lighthouse evaluation for ${urls.length} pages...`);
-
-  // Sequential evaluation for stability
-  for (const url of urls) {
-    console.log(`🚀 Running Lighthouse for: ${url}`);
-
-    const chrome = await chromeLauncher.launch({
-      chromeFlags: ['--headless', '--no-sandbox']
-    });
-
-    const options = {
-      logLevel: 'silent',
-      output: 'json',
-      onlyCategories: ['performance', 'seo'],
-      port: chrome.port
-    };
-
-    try {
-      const runnerResult = await lighthouse(url, options);
-      const { performance, seo } = runnerResult.lhr.categories;
-
-      results[url] = {
-        performance: performance?.score ?? null,
-        seo: seo?.score ?? null,
-        fetchedAt: new Date().toISOString()
+/**
+ * Extract issues from audit results
+ */
+function extractIssues(audits, category, pageUrl) {
+  const issues = [];
+  for (const [auditId, audit] of Object.entries(audits)) {
+    if (audit.score !== null && audit.score < 1) {
+      const issue = {
+        id: auditId,
+        title: audit.title,
+        description: audit.description,
+        score: audit.score,
+        displayValue: audit.displayValue || null,
+        impact: calculateImpact(audit.score, audit.weight || 0),
+        effort: calculateEffort(audit),
+        category: category,
+        page: pageUrl
       };
-    } catch (error) {
-      console.error(`❌ Lighthouse failed for ${url}:`, error.message);
-      results[url] = {
-        performance: null,
-        seo: null,
-        error: error.message
-      };
-    } finally {
-      await chrome.kill();
+      if (audit.details && audit.details.items && Array.isArray(audit.details.items)) {
+        issue.itemCount = audit.details.items.length;
+        issue.details = audit.details.items.slice(0, 5);
+      }
+      issues.push(issue);
     }
   }
+  const impactOrder = { 'High': 0, 'Medium': 1, 'Low': 2 };
+  issues.sort((a, b) => {
+    if (impactOrder[a.impact] !== impactOrder[b.impact]) {
+      return impactOrder[a.impact] - impactOrder[b.impact];
+    }
+    return a.score - b.score;
+  });
+  return issues;
+}
 
-  console.log(`✅ Completed evaluation of ${urls.length} pages.`);
-  return results;
+/**
+ * Run Lighthouse audit for a single URL
+ */
+async function auditSinglePage(url, chrome) {
+  const options = {
+    logLevel: 'error',
+    output: 'json',
+    onlyCategories: ['performance', 'seo'],
+    port: chrome.port,
+  };
+
+  const runnerResult = await lighthouse(url, options);
+  const lhr = runnerResult.lhr;
+
+  const performanceScore = lhr.categories.performance.score * 100;
+  const seoScore = lhr.categories.seo.score * 100;
+
+  const performanceIssues = extractIssues(
+    lhr.audits,
+    'performance',
+    url
+  ).filter(issue => {
+    const perfAuditRefs = lhr.categories.performance.auditRefs.map(ref => ref.id);
+    return perfAuditRefs.includes(issue.id);
+  });
+
+  const seoIssues = extractIssues(
+    lhr.audits,
+    'seo',
+    url
+  ).filter(issue => {
+    const seoAuditRefs = lhr.categories.seo.auditRefs.map(ref => ref.id);
+    return seoAuditRefs.includes(issue.id);
+  });
+
+  return {
+    url,
+    performanceScore,
+    seoScore,
+    performanceIssues,
+    seoIssues,
+    metrics: {
+      firstContentfulPaint: lhr.audits['first-contentful-paint']?.numericValue,
+      largestContentfulPaint: lhr.audits['largest-contentful-paint']?.numericValue,
+      totalBlockingTime: lhr.audits['total-blocking-time']?.numericValue,
+      cumulativeLayoutShift: lhr.audits['cumulative-layout-shift']?.numericValue,
+      speedIndex: lhr.audits['speed-index']?.numericValue,
+    }
+  };
+}
+
+/**
+ * Main function to audit multiple endpoints
+ */
+export async function auditMultipleEndpoints(endpoints) {
+  const chrome = await chromeLauncher.launch({ chromeFlags: ['--headless'] });
+  
+  try {
+    const results = [];
+    
+    for (const endpoint of endpoints) {
+      console.log(`Auditing: ${endpoint}`);
+      const result = await auditSinglePage(endpoint, chrome);
+      results.push(result);
+    }
+
+    // Calculate overall scores (weighted average)
+    const overallPerformanceScore = results.reduce((sum, r) => sum + r.performanceScore, 0) / results.length;
+    const overallSeoScore = results.reduce((sum, r) => sum + r.seoScore, 0) / results.length;
+
+    // Aggregate all issues
+    const allPerformanceIssues = results.flatMap(r => r.performanceIssues);
+    const allSeoIssues = results.flatMap(r => r.seoIssues);
+
+    // Group issues by ID and aggregate
+    const groupedPerformanceIssues = groupIssuesByType(allPerformanceIssues);
+    const groupedSeoIssues = groupIssuesByType(allSeoIssues);
+
+    return {
+      summary: {
+        totalPages: endpoints.length,
+        overallPerformanceScore: Math.round(overallPerformanceScore),
+        overallSeoScore: Math.round(overallSeoScore),
+        performanceGrade: getGrade(overallPerformanceScore),
+        seoGrade: getGrade(overallSeoScore),
+        timestamp: new Date().toISOString()
+      },
+      pageResults: results.map(r => ({
+        url: r.url,
+        performanceScore: Math.round(r.performanceScore),
+        seoScore: Math.round(r.seoScore),
+        metrics: r.metrics
+      })),
+      issues: {
+        performance: groupedPerformanceIssues,
+        seo: groupedSeoIssues
+      },
+      detailedPageIssues: results.map(r => ({
+        url: r.url,
+        performanceIssueCount: r.performanceIssues.length,
+        seoIssueCount: r.seoIssues.length,
+        performanceIssues: r.performanceIssues,
+        seoIssues: r.seoIssues
+      }))
+    };
+  } finally {
+    await chrome.kill();
+  }
+}
+
+/**
+ * Group issues by type and aggregate information
+ */
+function groupIssuesByType(issues) {
+  const grouped = {};
+  
+  issues.forEach(issue => {
+    if (!grouped[issue.id]) {
+      grouped[issue.id] = {
+        id: issue.id,
+        title: issue.title,
+        description: issue.description,
+        category: issue.category,
+        impact: issue.impact,
+        effort: issue.effort,
+        affectedPages: [],
+        averageScore: 0,
+        occurrences: 0
+      };
+    }
+    
+    grouped[issue.id].affectedPages.push({
+      url: issue.page,
+      score: issue.score,
+      displayValue: issue.displayValue
+    });
+    grouped[issue.id].averageScore += issue.score;
+    grouped[issue.id].occurrences += 1;
+  });
+
+  // Calculate average scores and sort
+  const result = Object.values(grouped).map(issue => {
+    issue.averageScore = (issue.averageScore / issue.occurrences).toFixed(2);
+    return issue;
+  });
+
+  // Sort by impact and then by average score
+  const impactOrder = { 'High': 0, 'Medium': 1, 'Low': 2 };
+  result.sort((a, b) => {
+    if (impactOrder[a.impact] !== impactOrder[b.impact]) {
+      return impactOrder[a.impact] - impactOrder[b.impact];
+    }
+    return parseFloat(a.averageScore) - parseFloat(b.averageScore);
+  });
+
+  return result;
+}
+
+/**
+ * Get grade based on score
+ */
+function getGrade(score) {
+  if (score >= 90) return 'A';
+  if (score >= 80) return 'B';
+  if (score >= 70) return 'C';
+  if (score >= 60) return 'D';
+  return 'F';
 }

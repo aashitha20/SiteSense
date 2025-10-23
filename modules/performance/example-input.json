@@ -1,0 +1,8 @@
+{
+  "endpoints": [
+    "https://web.dev",
+    "https://web.dev/learn",
+    "https://web.dev/articles"
+  ],
+  "outputFile": "audit-results.json"
+}
